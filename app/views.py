@@ -2,8 +2,8 @@ from flask import Blueprint, request
 from flask_restx import Resource, fields, Namespace
 from app.models import db, Package
 
-# Criar um namespace para pacotes
-api_namespace = Namespace("packages", description="Operações relacionadas a pacotes")
+# Namespace para pacotes
+api_namespace = Namespace("packages", description="Operações de gerenciamento de pacotes")
 
 # Modelo de Pacote para documentação
 package_model = api_namespace.model("Package", {
@@ -34,6 +34,7 @@ class PackageListResource(Resource):
 
     @api_namespace.doc("Criar um novo pacote")
     @api_namespace.expect(package_model)
+    @api_namespace.marshal_with(package_model, code=201)
     def post(self):
         """Cria um novo pacote"""
         data = request.json
@@ -44,19 +45,42 @@ class PackageListResource(Resource):
         )
         db.session.add(package)
         db.session.commit()
-        return {"message": "Pacote criado com sucesso!"}, 201
+        return package, 201
 
 @api_namespace.route("/<int:package_id>")
 class PackageResource(Resource):
-    @api_namespace.doc("Atualizar o status de um pacote")
-    @api_namespace.expect({"status": fields.String(description="Novo status do pacote")})
-    def patch(self, package_id):
-        """Atualiza o status de um pacote"""
-        data = request.json
+    @api_namespace.doc("Obter detalhes de um pacote")
+    @api_namespace.marshal_with(package_model)
+    def get(self, package_id):
+        """Obtem detalhes de um pacote pelo ID"""
         package = Package.query.get(package_id)
         if not package:
-            return {"error": "Pacote não encontrado"}, 404
+            api_namespace.abort(404, "Pacote não encontrado")
+        return package
 
-        package.status = data.get("status", package.status)
+    @api_namespace.doc("Atualizar um pacote")
+    @api_namespace.expect(package_model)
+    @api_namespace.marshal_with(package_model)
+    def put(self, package_id):
+        """Atualiza completamente um pacote pelo ID"""
+        package = Package.query.get(package_id)
+        if not package:
+            api_namespace.abort(404, "Pacote não encontrado")
+
+        data = request.json
+        package.origin = data["origin"]
+        package.destination = data["destination"]
+        package.status = data["status"]
         db.session.commit()
-        return {"message": "Status atualizado com sucesso!"}
+        return package
+
+    @api_namespace.doc("Excluir um pacote")
+    def delete(self, package_id):
+        """Exclui um pacote pelo ID"""
+        package = Package.query.get(package_id)
+        if not package:
+            api_namespace.abort(404, "Pacote não encontrado")
+        
+        db.session.delete(package)
+        db.session.commit()
+        return {"message": "Pacote excluído com sucesso"}, 200
